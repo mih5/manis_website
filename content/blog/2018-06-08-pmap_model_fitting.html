@@ -1,0 +1,158 @@
+---
+title: "Using purr::pmap to fit many models"
+author: "Mao Hu"
+date: "2018-06-05"
+output: html_document
+---
+
+
+
+<div id="overview" class="section level3">
+<h3>Overview</h3>
+<p>To show some uses of <code>purrr::pmap</code> to fit models with different specifications or on subsets of a dataset.</p>
+</div>
+<div id="problem" class="section level3">
+<h3>Problem</h3>
+<p>A common task in my work is to fit a variety of models with different specifiations on the same dataset. For instance, perhaps we are interested in how the departure and arrival delays among flights departing from NYC in 2013 differ from airport to airport. We can use the <code>nycflights13::flights</code> dataset to investigate this question:</p>
+<pre class="r"><code>library(nycflights13)
+head(flights)</code></pre>
+<pre><code>## # A tibble: 6 x 19
+##    year month   day dep_time sched_dep_time dep_delay arr_time
+##   &lt;int&gt; &lt;int&gt; &lt;int&gt;    &lt;int&gt;          &lt;int&gt;     &lt;dbl&gt;    &lt;int&gt;
+## 1  2013     1     1      517            515        2.      830
+## 2  2013     1     1      533            529        4.      850
+## 3  2013     1     1      542            540        2.      923
+## 4  2013     1     1      544            545       -1.     1004
+## 5  2013     1     1      554            600       -6.      812
+## 6  2013     1     1      554            558       -4.      740
+## # ... with 12 more variables: sched_arr_time &lt;int&gt;, arr_delay &lt;dbl&gt;,
+## #   carrier &lt;chr&gt;, flight &lt;int&gt;, tailnum &lt;chr&gt;, origin &lt;chr&gt;, dest &lt;chr&gt;,
+## #   air_time &lt;dbl&gt;, distance &lt;dbl&gt;, hour &lt;dbl&gt;, minute &lt;dbl&gt;,
+## #   time_hour &lt;dttm&gt;</code></pre>
+<pre class="r"><code>flights$origin &lt;- factor(flights$origin, levels=c(&quot;JFK&quot;, &quot;LGA&quot;, &quot;EWR&quot;)) # Make JFK the reference</code></pre>
+<p>Suppose we’d like to fit a simple linear model for each response variable (<code>dep_delay</code> and <code>arr_delay</code>) with the origin airport as a predictor (and JFK as the reference), and we wanted to summarize the average difference in delay for LGA relative to JFK (the coefficient from the model, though honestly a priori I feel LaGuardia is the worst).</p>
+<p>How might we do this?</p>
+</div>
+<div id="solutions" class="section level3">
+<h3>Solutions</h3>
+<p>Using base R, we might do the following:</p>
+<pre class="r"><code>model_parameters &lt;- data.frame(outcome_var = c(&quot;dep_delay&quot;, &quot;arr_delay&quot;), stringsAsFactors=FALSE)
+
+# define function for fitting model and returning coefficient
+fit_model &lt;- function(
+   outcome_var,        # outcome variable
+   covariate=NULL,  # optional covariate, will be used later
+   flights_data = flights        # by default, use the full flights data
+   ){
+   model_string &lt;- paste0(outcome_var, &quot;~ origin&quot;)
+   if(!is.null(covariate)){model_string &lt;- paste0(model_string, &quot;+&quot;, covariate)}
+   model_formula &lt;- as.formula(model_string)
+   mod &lt;- lm(model_formula, data=flights_data)
+   return(coef(mod)[&quot;originLGA&quot;])
+}
+
+# lapply over response vars and combine
+result &lt;- do.call(c, lapply(model_parameters$outcome_var, FUN=fit_model))
+
+library(tidyverse)
+as_data_frame(cbind(model_parameters, LGA_JFK_diff=result))</code></pre>
+<pre><code>## # A tibble: 2 x 2
+##   outcome_var LGA_JFK_diff
+##   &lt;chr&gt;              &lt;dbl&gt;
+## 1 dep_delay         -1.77 
+## 2 arr_delay          0.232</code></pre>
+<p>Equivalently, using <code>purrr::pmap</code> we could do the following:</p>
+<pre class="r"><code>library(purrr) # or library(tidyverse)
+result &lt;- pmap_dbl(model_parameters, .f=fit_model)
+as_data_frame(cbind(model_parameters, LGA_JFK_diff=result))</code></pre>
+<pre><code>## # A tibble: 2 x 2
+##   outcome_var LGA_JFK_diff
+##   &lt;chr&gt;              &lt;dbl&gt;
+## 1 dep_delay         -1.77 
+## 2 arr_delay          0.232</code></pre>
+<p>The suffix <code>_dbl</code> indicates that the output from the function should be combined into a vector of the <code>numeric</code> type.</p>
+<p>These solutions are both similar. However, the <code>purr::pmap</code> solution is more easily extensible. Suppose we wanted to add another variable to the model, such as <code>sched_dep_time</code> or <code>distance</code>. The base R solution might look like as follows:</p>
+<pre class="r"><code>model_parameters &lt;- expand.grid(
+  outcome_var = c(&quot;dep_delay&quot;, &quot;arr_delay&quot;),
+  covariate = c(&quot;sched_dep_time&quot;, &quot;distance&quot;),
+  stringsAsFactors = FALSE
+)
+
+result &lt;- do.call(c, lapply(1:nrow(model_parameters), FUN=function(i){
+  fit_model(
+    outcome_var = model_parameters[i, &quot;outcome_var&quot;],
+    covariate = model_parameters[i, &quot;covariate&quot;]
+  )
+}))
+
+as_data_frame(cbind(model_parameters, LGA_JFK_diff=result))</code></pre>
+<pre><code>## # A tibble: 4 x 3
+##   outcome_var covariate      LGA_JFK_diff
+##   &lt;chr&gt;       &lt;chr&gt;                 &lt;dbl&gt;
+## 1 dep_delay   sched_dep_time       -0.115
+## 2 arr_delay   sched_dep_time        1.84 
+## 3 dep_delay   distance             -2.55 
+## 4 arr_delay   distance             -1.75</code></pre>
+<p>The <code>purr::pmap</code> solution is more parsimonious:</p>
+<pre class="r"><code>result &lt;- pmap_dbl(model_parameters, .f=fit_model)
+as_data_frame(cbind(model_parameters, LGA_JFK_diff=result))</code></pre>
+<pre><code>## # A tibble: 4 x 3
+##   outcome_var covariate      LGA_JFK_diff
+##   &lt;chr&gt;       &lt;chr&gt;                 &lt;dbl&gt;
+## 1 dep_delay   sched_dep_time       -0.115
+## 2 arr_delay   sched_dep_time        1.84 
+## 3 dep_delay   distance             -2.55 
+## 4 arr_delay   distance             -1.75</code></pre>
+<p>This is because <code>purr::pmap</code> automatically passes the named elements of its first argument (<code>model_parameters</code>) to the corresponding arguments of its second argument (<code>fit_model</code>). This is a handy feature which can be used to avoid manually filling out arguments as above.</p>
+</div>
+<div id="extension" class="section level3">
+<h3>Extension</h3>
+<p>Another common task is to fit models on subgroups of the original dataset. In this case, we might be interested in calculating the difference in <code>dep_delay</code> or <code>arr_delay</code> between LGA and JFK for different carriers in different months. Briefly, one solution to running these models using <code>tidyverse</code> functions might be as follows:</p>
+<pre class="r"><code>model_parameters &lt;- expand.grid(
+   outcome_var = c(&quot;dep_delay&quot;, &quot;arr_delay&quot;),
+   carrier = c(&quot;AA&quot;, &quot;DL&quot;, &quot;UA&quot;),   # AA &#39;American Airlines&#39;; &#39;DL&#39; Delta Airlines; &#39;UA&#39; United Airlines
+   month = c(1, 6, 12), # January, June, December
+   stringsAsFactors = FALSE
+)
+
+# nest the carrier and month variables in a&#39;subset_to&#39; list variable
+model_parameters_tidy &lt;- model_parameters %&gt;%
+  mutate(model_num = row_number()) %&gt;%
+  nest(-model_num, -outcome_var, .key=&quot;subset_to&quot;) %&gt;%
+  select(-model_num)
+
+results &lt;- pmap_dfr(model_parameters_tidy, .f=function(outcome_var, subset_to){
+  subset_flights &lt;- inner_join(flights, subset_to) # subset the flights data
+  diff &lt;-  fit_model(outcome_var, flights_data=subset_flights)
+  obs &lt;- nrow(subset_flights)
+  data.frame(obs, LGA_JFK_diff=diff)
+})
+
+as_data_frame(cbind(model_parameters, results))</code></pre>
+<pre><code>## # A tibble: 18 x 5
+##    outcome_var carrier month   obs LGA_JFK_diff
+##    &lt;chr&gt;       &lt;chr&gt;   &lt;dbl&gt; &lt;int&gt;        &lt;dbl&gt;
+##  1 dep_delay   AA         1.  2794      -3.48  
+##  2 arr_delay   AA         1.  2794      -0.410 
+##  3 dep_delay   DL         1.  3690      -0.492 
+##  4 arr_delay   DL         1.  3690       8.59  
+##  5 dep_delay   UA         1.  4637       7.93  
+##  6 arr_delay   UA         1.  4637       6.63  
+##  7 dep_delay   AA         6.  2757      -0.0472
+##  8 arr_delay   AA         6.  2757      -2.63  
+##  9 dep_delay   DL         6.  4126      -0.481 
+## 10 arr_delay   DL         6.  4126      -0.763 
+## 11 dep_delay   UA         6.  4975       9.00  
+## 12 arr_delay   UA         6.  4975      -2.47  
+## 13 dep_delay   AA        12.  2705      -5.63  
+## 14 arr_delay   AA        12.  2705      -4.80  
+## 15 dep_delay   DL        12.  4093      -0.0297
+## 16 arr_delay   DL        12.  4093       2.82  
+## 17 dep_delay   UA        12.  4931       7.13  
+## 18 arr_delay   UA        12.  4931       9.40</code></pre>
+<p>Here, we leverage the <code>tidyr::nest</code> function to group some of the variables on the <code>model_parameters</code> data.frame into a <code>subset_to</code> list column, which we subsequently use to subset the data before running the model.</p>
+</div>
+<div id="acknowledgements" class="section level3">
+<h3>Acknowledgements</h3>
+<p>I first discovered <code>purrr::pmap</code> via Jenny Bryan’s excellent <a href="https://speakerdeck.com/jennybc/row-oriented-workflows-in-r-with-the-tidyverse">Row-oriented workflows in R with the Tidyverse</a>.</p>
+</div>

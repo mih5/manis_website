@@ -1,0 +1,123 @@
+---
+title: "Using purr::pmap to fit many models"
+author: "Mao Hu"
+date: "2018-06-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Overview
+
+To show some uses of `purrr::pmap` to fit models with different specifications or on subsets of a dataset. 
+
+### Problem
+
+A common task in my work is to fit a variety of models with different specifiations on the same dataset. For instance, perhaps we are interested in how the departure and arrival delays among flights departing from NYC in 2013 differ from airport to airport. We can use the `nycflights13::flights` dataset to investigate this question:
+
+```{r}
+library(nycflights13)
+head(flights)
+flights$origin <- factor(flights$origin, levels=c("JFK", "LGA", "EWR")) # Make JFK the reference
+```
+
+Suppose we'd like to fit a simple linear model for each response variable (`dep_delay` and `arr_delay`) with the origin airport as a predictor (and JFK as the reference), and we wanted to summarize the average difference in delay for LGA relative to JFK (the coefficient from the model, though honestly a priori I feel LaGuardia is the worst).
+
+How might we do this?
+
+### Solutions
+
+Using base R, we might do the following:
+```{r, message=FALSE}
+model_parameters <- data.frame(outcome_var = c("dep_delay", "arr_delay"), stringsAsFactors=FALSE)
+
+# define function for fitting model and returning coefficient
+fit_model <- function(
+   outcome_var,        # outcome variable
+   covariate=NULL,  # optional covariate, will be used later
+   flights_data = flights        # by default, use the full flights data
+   ){
+   model_string <- paste0(outcome_var, "~ origin")
+   if(!is.null(covariate)){model_string <- paste0(model_string, "+", covariate)}
+   model_formula <- as.formula(model_string)
+   mod <- lm(model_formula, data=flights_data)
+   return(coef(mod)["originLGA"])
+}
+
+# lapply over response vars and combine
+result <- do.call(c, lapply(model_parameters$outcome_var, FUN=fit_model))
+
+library(tidyverse)
+as_data_frame(cbind(model_parameters, LGA_JFK_diff=result))
+```
+
+Equivalently, using `purrr::pmap` we could do the following:
+```{r, message=FALSE}
+library(purrr) # or library(tidyverse)
+result <- pmap_dbl(model_parameters, .f=fit_model)
+as_data_frame(cbind(model_parameters, LGA_JFK_diff=result))
+```
+
+The suffix `_dbl` indicates that the output from the function should be combined into a vector of the `numeric` type.
+
+These solutions are both similar. However, the `purr::pmap` solution is more easily extensible. Suppose we wanted to add another variable to the model, such as `sched_dep_time` or `distance`. The base R solution might look like as follows:
+
+```{r}
+model_parameters <- expand.grid(
+  outcome_var = c("dep_delay", "arr_delay"),
+  covariate = c("sched_dep_time", "distance"),
+  stringsAsFactors = FALSE
+)
+
+result <- do.call(c, lapply(1:nrow(model_parameters), FUN=function(i){
+  fit_model(
+    outcome_var = model_parameters[i, "outcome_var"],
+    covariate = model_parameters[i, "covariate"]
+  )
+}))
+
+as_data_frame(cbind(model_parameters, LGA_JFK_diff=result))
+```
+
+The `purr::pmap` solution is more parsimonious:
+```{r}
+result <- pmap_dbl(model_parameters, .f=fit_model)
+as_data_frame(cbind(model_parameters, LGA_JFK_diff=result))
+```
+This is because `purr::pmap` automatically passes the named elements of its first argument (`model_parameters`) to the corresponding arguments of its second argument (`fit_model`). This is a handy feature which can be used to avoid manually filling out arguments as above.
+
+### Extension
+
+Another common task is to fit models on subgroups of the original dataset. In this case, we might be interested in calculating the difference in `dep_delay` or `arr_delay` between LGA and JFK for different carriers in different months. Briefly, one solution to running these models using `tidyverse` functions might be as follows:
+
+```{r, message=FALSE}
+model_parameters <- expand.grid(
+   outcome_var = c("dep_delay", "arr_delay"),
+   carrier = c("AA", "DL", "UA"),   # AA 'American Airlines'; 'DL' Delta Airlines; 'UA' United Airlines
+   month = c(1, 6, 12), # January, June, December
+   stringsAsFactors = FALSE
+)
+
+# nest the carrier and month variables in a'subset_to' list variable
+model_parameters_tidy <- model_parameters %>%
+  mutate(model_num = row_number()) %>%
+  nest(-model_num, -outcome_var, .key="subset_to") %>%
+  select(-model_num)
+
+results <- pmap_dfr(model_parameters_tidy, .f=function(outcome_var, subset_to){
+  subset_flights <- inner_join(flights, subset_to) # subset the flights data
+  diff <-  fit_model(outcome_var, flights_data=subset_flights)
+  obs <- nrow(subset_flights)
+  data.frame(obs, LGA_JFK_diff=diff)
+})
+
+as_data_frame(cbind(model_parameters, results))
+```
+
+Here, we leverage the `tidyr::nest` function to group some of the variables on the `model_parameters` data.frame into a `subset_to` list column, which we subsequently use to subset the data before running the model.
+
+### Acknowledgements 
+
+I first discovered `purrr::pmap` via Jenny Bryan's excellent [Row-oriented workflows in R with the Tidyverse](https://speakerdeck.com/jennybc/row-oriented-workflows-in-r-with-the-tidyverse).
