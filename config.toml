@@ -1,4 +1,4 @@
-baseURL = "example.com"
+baseURL = ""
 title = "Mao Hu"
 theme = "manis-hugo-theme"
 
@@ -67,6 +67,8 @@ pygmentsUseClasses = true
 	github = "https://github.com/mih5/"
 	twitter = "https://twitter.com/maoihu"
 
+  #
+ ignoreFiles = ["\\.Rmd$", "\\.Rmarkdown$", "_files$", "_cache$"]
 
 # Language Configuration
 #[languages.in]
