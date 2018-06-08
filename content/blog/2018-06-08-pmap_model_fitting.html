@@ -30,8 +30,7 @@ head(flights)</code></pre>
 ## #   air_time &lt;dbl&gt;, distance &lt;dbl&gt;, hour &lt;dbl&gt;, minute &lt;dbl&gt;,
 ## #   time_hour &lt;dttm&gt;</code></pre>
 <pre class="r"><code>flights$origin &lt;- factor(flights$origin, levels=c(&quot;JFK&quot;, &quot;LGA&quot;, &quot;EWR&quot;)) # Make JFK the reference</code></pre>
-<p>Suppose we’d like to fit a simple linear model for each response variable (<code>dep_delay</code> and <code>arr_delay</code>) with the origin airport as a predictor (and JFK as the reference), and we wanted to summarize the average difference in delay for LGA relative to JFK (the coefficient from the model, though honestly a priori I feel LaGuardia is the worst).</p>
-<p>How might we do this?</p>
+<p>Suppose we’d like to fit a simple linear model for each response variable (<code>dep_delay</code> and <code>arr_delay</code>) with the origin airport as a predictor (and JFK as the reference), and we wanted to summarize the average difference in delay for LGA relative to JFK. How might we do this?</p>
 </div>
 <div id="solutions" class="section level3">
 <h3>Solutions</h3>

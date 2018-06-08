@@ -23,9 +23,7 @@ head(flights)
 flights$origin <- factor(flights$origin, levels=c("JFK", "LGA", "EWR")) # Make JFK the reference
 ```
 
-Suppose we'd like to fit a simple linear model for each response variable (`dep_delay` and `arr_delay`) with the origin airport as a predictor (and JFK as the reference), and we wanted to summarize the average difference in delay for LGA relative to JFK (the coefficient from the model, though honestly a priori I feel LaGuardia is the worst).
-
-How might we do this?
+Suppose we'd like to fit a simple linear model for each response variable (`dep_delay` and `arr_delay`) with the origin airport as a predictor (and JFK as the reference), and we wanted to summarize the average difference in delay for LGA relative to JFK. How might we do this?
 
 ### Solutions
 
