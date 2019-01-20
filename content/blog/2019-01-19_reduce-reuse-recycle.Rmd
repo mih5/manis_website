@@ -1,0 +1,27 @@
+---
+title: "Reduce, reuse, recycle"
+author: "Mao Hu"
+date: "2019-01-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+One thing to strive for in data analysis projects is reducing waste - wasted effort, wasted attention, wasted time. Some advice from the side of a recycling bin:
+
+### Reduce
+
+Consider carefully the question at hand and ask which analyses are necessary. If your client or colleague is asking, ask them to order the priority of their questions. Do the most important things first. You may not end up needing all of them.
+
+### Reuse
+
+If you have analyses that can be re-run easily with different parameters, such as on subgroups of the main population, try that. Write programs in a modular way so that they can be reordered or repurposed in different contexts. 
+
+### Recycle
+
+If a whole program cannot be salvaged for a new purpose, perhaps definitions, algorithims, or procedures can be. Break down a program into its basic logical elements and use them to build anew.
+
