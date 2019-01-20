@@ -15,7 +15,7 @@ One thing to strive for in data analysis projects is reducing waste - wasted eff
 
 ### Reduce
 
-Consider carefully the question at hand and ask which analyses are necessary. If your client or colleague is asking, ask them to order the priority of their questions. Do the most important things first. You may not end up needing all of them.
+Consider carefully the question at hand and ask which analyses are necessary. If working with a client or colleague, ask them to order the priority of their questions. Do the most important things first. You may not end up needing all of them.
 
 ### Reuse
 
@@ -23,5 +23,5 @@ If you have analyses that can be re-run easily with different parameters, such a
 
 ### Recycle
 
-If a whole program cannot be salvaged for a new purpose, perhaps definitions, algorithims, or procedures can be. Break down a program into its basic logical elements and use them to build anew.
+If a whole program cannot be salvaged for a new purpose, perhaps definitions, algorithms, or procedures can be. Break down a program into its basic logical elements and use them to build anew.
 
